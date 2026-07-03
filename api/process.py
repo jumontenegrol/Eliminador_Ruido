@@ -202,7 +202,7 @@ def reducir_wiener(señal, fs, agresividad=1.5, **_):
 def mejorar_calidad(señal, fs):
     from scipy.signal import sosfilt
 
-    s = señal.copy().astype(np.float64)
+    s = np.array(señal, dtype=np.float64, copy=True)
 
     def biquad_lowshelf(f0, ganancia_db, fs):
         A = 10**(ganancia_db/40); w0 = 2*np.pi*f0/fs
@@ -229,7 +229,8 @@ def mejorar_calidad(señal, fs):
     s = sosfilt(biquad_highshelf(3000, 4.0, fs), s)
     rms_orig = np.sqrt(np.mean(señal**2)) + 1e-9
     rms_proc = np.sqrt(np.mean(s**2)) + 1e-9
-    return (s * (rms_orig/rms_proc)).astype(np.float32)
+    resultado = s * float(rms_orig/rms_proc)
+    return np.array(resultado, dtype=np.float32)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -485,6 +486,7 @@ class handler(BaseHTTPRequestHandler):
             senal, fs = sf.read(buf_in)
             if senal.ndim > 1: senal = senal.mean(axis=1)
             senal = senal.astype(np.float32)
+            senal = np.ascontiguousarray(senal, dtype=np.float64)
 
             # Limitar a 60s (timeout Vercel free)
             if len(senal) > 60 * fs:
