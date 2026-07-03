@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AudioClean — Eliminación de Ruido</title>
+  <style>
+    /* ── TOKENS ─────────────────────────────────────────────────────────── */
+    :root {
+      --bg:       #0D1117;
+      --surface:  #161B22;
+      --surface2: #1C2330;
+      --border:   #30363D;
+      --teal:     #0D9488;
+      --teal-lt:  #14B8A6;
+      --mint:     #99F6E4;
+      --white:    #E6EDF3;
+      --muted:    #8B949E;
+      --red:      #FF6B6B;
+      --green:    #3FB950;
+      --yellow:   #FFD93D;
+      --radius:   12px;
+      --ff-mono:  'Courier New', monospace;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--white);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* ── HEADER ─────────────────────────────────────────────────────────── */
+    header {
+      padding: 2rem 2rem 0;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    .badge {
+      display: inline-block;
+      background: var(--teal);
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      margin-bottom: 1rem;
+    }
+
+    h1 {
+      font-size: clamp(2rem, 5vw, 3rem);
+      font-weight: 800;
+      line-height: 1.15;
+      color: var(--white);
+      letter-spacing: -0.02em;
+    }
+
+    h1 span { color: var(--teal-lt); }
+
+    .subtitle {
+      margin-top: 0.6rem;
+      color: var(--muted);
+      font-size: 1rem;
+      max-width: 520px;
+    }
+
+    /* ── MAIN ───────────────────────────────────────────────────────────── */
+    main {
+      max-width: 860px;
+      margin: 2rem auto 4rem;
+      padding: 0 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    /* ── CARD ───────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+    }
+
+    .card-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 1rem;
+    }
+
+    /* ── DROP ZONE ──────────────────────────────────────────────────────── */
+    #drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+
+    #drop-zone:hover, #drop-zone.drag-over {
+      border-color: var(--teal);
+      background: rgba(13, 148, 136, 0.05);
+    }
+
+    #drop-zone.has-file {
+      border-color: var(--teal);
+      border-style: solid;
+    }
+
+    .drop-icon {
+      font-size: 2.5rem;
+      margin-bottom: 0.75rem;
+      display: block;
+    }
+
+    .drop-text {
+      font-size: 1rem;
+      color: var(--white);
+      font-weight: 600;
+    }
+
+    .drop-hint {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-top: 0.3rem;
+    }
+
+    #file-input { display: none; }
+
+    .file-name {
+      margin-top: 1rem;
+      display: none;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.85rem;
+      color: var(--teal-lt);
+      font-family: var(--ff-mono);
+    }
+
+    .file-name.visible { display: flex; }
+
+    /* ── OPCIONES ───────────────────────────────────────────────────────── */
+    .options-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    label.opt-label {
+      font-size: 0.82rem;
+      color: var(--muted);
+      display: block;
+      margin-bottom: 0.4rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    select, input[type="range"] {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--white);
+      font-size: 0.9rem;
+      padding: 0.5rem 0.75rem;
+      appearance: none;
+      outline: none;
+      cursor: pointer;
+    }
+
+    select:focus { border-color: var(--teal); }
+
+    input[type="range"] {
+      padding: 0.3rem 0;
+      accent-color: var(--teal);
+    }
+
+    .range-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .range-val {
+      font-family: var(--ff-mono);
+      font-size: 0.9rem;
+      color: var(--teal-lt);
+      min-width: 2.5rem;
+      text-align: right;
+    }
+
+    /* ── MÉTODO CARDS ───────────────────────────────────────────────────── */
+    .method-info {
+      display: none;
+      margin-top: 0.75rem;
+      padding: 0.75rem;
+      background: var(--surface2);
+      border-radius: 8px;
+      font-size: 0.82rem;
+      color: var(--muted);
+      border-left: 3px solid var(--teal);
+    }
+
+    .method-info.visible { display: block; }
+    .method-info strong { color: var(--teal-lt); }
+
+    /* ── BOTÓN PROCESAR ─────────────────────────────────────────────────── */
+    #btn-process {
+      width: 100%;
+      padding: 1rem;
+      background: var(--teal);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+    }
+
+    #btn-process:hover:not(:disabled) { background: var(--teal-lt); }
+    #btn-process:active:not(:disabled) { transform: scale(0.99); }
+    #btn-process:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* ── PROGRESS ───────────────────────────────────────────────────────── */
+    #progress-wrap {
+      display: none;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+
+    #progress-wrap.visible { display: flex; }
+
+    .progress-bar-bg {
+      height: 6px;
+      background: var(--surface2);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--teal), var(--mint));
+      border-radius: 999px;
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    .progress-label {
+      font-size: 0.82rem;
+      color: var(--muted);
+      font-family: var(--ff-mono);
+    }
+
+    /* ── RESULTADO ──────────────────────────────────────────────────────── */
+    #result-card { display: none; }
+    #result-card.visible { display: block; }
+
+    .result-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .result-badge {
+      background: rgba(63, 185, 80, 0.15);
+      border: 1px solid var(--green);
+      color: var(--green);
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+    }
+
+    .snr-pill {
+      background: rgba(13, 148, 136, 0.15);
+      border: 1px solid var(--teal);
+      color: var(--mint);
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-family: var(--ff-mono);
+    }
+
+    /* ── WAVEFORM ───────────────────────────────────────────────────────── */
+    .waveform-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .waveform-wrap {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem;
+    }
+
+    .waveform-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.5rem;
+    }
+
+    canvas.waveform {
+      width: 100%;
+      height: 70px;
+      display: block;
+    }
+
+    /* ── AUDIO PLAYER ───────────────────────────────────────────────────── */
+    audio {
+      width: 100%;
+      margin-bottom: 1rem;
+      border-radius: 8px;
+      accent-color: var(--teal);
+    }
+
+    /* ── DOWNLOAD BTN ───────────────────────────────────────────────────── */
+    #btn-download {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: transparent;
+      border: 1px solid var(--teal);
+      color: var(--teal-lt);
+      padding: 0.6rem 1.2rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.2s;
+    }
+
+    #btn-download:hover { background: rgba(13,148,136,0.1); }
+
+    /* ── ERROR ──────────────────────────────────────────────────────────── */
+    #error-msg {
+      display: none;
+      padding: 0.85rem 1rem;
+      background: rgba(255, 107, 107, 0.1);
+      border: 1px solid var(--red);
+      border-radius: 8px;
+      color: var(--red);
+      font-size: 0.88rem;
+    }
+
+    #error-msg.visible { display: block; }
+
+    /* ── INFO FOOTER ────────────────────────────────────────────────────── */
+    .info-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+
+    .chip {
+      font-size: 0.75rem;
+      padding: 0.2rem 0.65rem;
+      border-radius: 999px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: var(--ff-mono);
+    }
+
+    /* ── FOOTER ─────────────────────────────────────────────────────────── */
+    footer {
+      text-align: center;
+      padding: 2rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+    }
+
+    footer a { color: var(--teal-lt); text-decoration: none; }
+
+    /* ── RESPONSIVE ─────────────────────────────────────────────────────── */
+    @media (max-width: 580px) {
+      .options-grid { grid-template-columns: 1fr; }
+      .waveform-row { grid-template-columns: 1fr; }
+      header, main { padding: 0 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <span class="badge">UNAL · Teoría de la Información 2026-1</span>
+  <h1>Audio<span>Clean</span></h1>
+  <p class="subtitle">Sube una grabación con ruido de fondo y el sistema lo eliminará usando procesamiento digital de señales y la Transformada de Fourier.</p>
+</header>
+
+<main>
+
+  <!-- ── UPLOAD ── -->
+  <div class="card">
+    <p class="card-title">1 · Sube tu audio</p>
+
+    <div id="drop-zone">
+      <span class="drop-icon">🎙</span>
+      <p class="drop-text">Arrastra tu archivo aquí</p>
+      <p class="drop-hint">o haz clic para seleccionarlo · WAV, MP3, FLAC · máx. 50 MB</p>
+      <input type="file" id="file-input" accept=".wav,.mp3,.flac,.ogg,.m4a" />
+    </div>
+
+    <div class="file-name" id="file-name-display">
+      <span>📁</span>
+      <span id="file-name-text">—</span>
+    </div>
+  </div>
+
+  <!-- ── OPCIONES ── -->
+  <div class="card">
+    <p class="card-title">2 · Configura el procesamiento</p>
+    <div class="options-grid">
+
+      <div>
+        <label class="opt-label" for="sel-metodo">Método de reducción</label>
+        <select id="sel-metodo">
+          <option value="espectral">Sustracción Espectral (FFT explícita)</option>
+          <option value="wiener">Filtro de Wiener</option>
+          <option value="mmse">MMSE No Estacionario</option>
+        </select>
+        <div class="method-info visible" id="method-desc">
+          Estima el espectro del ruido y lo resta bin a bin usando la FFT. Balance óptimo entre reducción y calidad.
+        </div>
+      </div>
+
+      <div>
+        <label class="opt-label" for="rng-agresividad">Agresividad del filtrado</label>
+        <div class="range-row">
+          <input type="range" id="rng-agresividad" min="0.5" max="2.5" step="0.1" value="1.5" />
+          <span class="range-val" id="agresividad-val">1.5</span>
+        </div>
+        <p class="drop-hint" style="margin-top:0.4rem">
+          Bajo = más suave · Alto = más agresivo (puede distorsionar la voz)
+        </p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── PROCESAR ── -->
+  <button id="btn-process" disabled>
+    <span id="btn-icon">⚡</span>
+    <span id="btn-label">Procesar audio</span>
+  </button>
+
+  <!-- ── PROGRESS ── -->
+  <div id="progress-wrap">
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill" id="progress-fill"></div>
+    </div>
+    <p class="progress-label" id="progress-label">Iniciando procesamiento…</p>
+  </div>
+
+  <!-- ── ERROR ── -->
+  <div id="error-msg"></div>
+
+  <!-- ── RESULTADO ── -->
+  <div class="card" id="result-card">
+    <div class="result-header">
+      <p class="card-title" style="margin:0">Resultado</p>
+      <span class="result-badge">✓ Procesado</span>
+      <span class="snr-pill" id="snr-display">SNR —</span>
+    </div>
+
+    <div class="waveform-row">
+      <div class="waveform-wrap">
+        <p class="waveform-label" style="color: var(--red)">🔴 Original (con ruido)</p>
+        <canvas class="waveform" id="wv-orig"></canvas>
+      </div>
+      <div class="waveform-wrap">
+        <p class="waveform-label" style="color: var(--teal-lt)">🟢 Procesado (sin ruido)</p>
+        <canvas class="waveform" id="wv-proc"></canvas>
+      </div>
+    </div>
+
+    <audio id="audio-result" controls></audio>
+
+    <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap">
+      <a id="btn-download" download="audio_sin_ruido.wav">
+        ⬇ Descargar WAV
+      </a>
+      <div class="info-chips" id="info-chips"></div>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  Proyecto de Teoría de la Información · Universidad Nacional de Colombia 2026-1<br/>
+  Juan David Montenegro Lopez · Cristian David Arcia Quintero ·
+  <a href="https://github.com" target="_blank">GitHub</a>
+</footer>
+
+<script>
+// ── ESTADO ─────────────────────────────────────────────────────────────────
+let audioFile = null;
+let origBuffer = null;
+
+const METHOD_DESC = {
+  espectral: 'Estima el espectro del ruido y lo resta bin a bin usando la <strong>FFT</strong>. Balance óptimo entre reducción y calidad de voz.',
+  wiener:    'Ganancia óptima H(f) = max(0, 1 − α·Pn/Px) por bin de frecuencia. Minimiza el error cuadrático medio.',
+  mmse:      'STFT adaptativa no estacionaria frame a frame. Mayor reducción de ruido, pero puede afectar más la calidad de voz.',
+};
+
+// ── DRAG & DROP ─────────────────────────────────────────────────────────────
+const dropZone  = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f) setFile(f);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) setFile(fileInput.files[0]);
+});
+
+function setFile(f) {
+  audioFile = f;
+  dropZone.classList.add('has-file');
+  document.getElementById('file-name-text').textContent = f.name;
+  document.getElementById('file-name-display').classList.add('visible');
+  document.getElementById('btn-process').disabled = false;
+
+  // Previsualizar waveform original
+  const reader = new FileReader();
+  reader.onload = async e => {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    try {
+      origBuffer = await ctx.decodeAudioData(e.target.result);
+    } catch(_) { origBuffer = null; }
+  };
+  reader.readAsArrayBuffer(f);
+
+  // Reset resultado anterior
+  document.getElementById('result-card').classList.remove('visible');
+  document.getElementById('error-msg').classList.remove('visible');
+}
+
+// ── MÉTODO SELECT ───────────────────────────────────────────────────────────
+document.getElementById('sel-metodo').addEventListener('change', function() {
+  const desc = document.getElementById('method-desc');
+  desc.innerHTML = METHOD_DESC[this.value];
+  desc.classList.add('visible');
+});
+
+// ── AGRESIVIDAD ─────────────────────────────────────────────────────────────
+document.getElementById('rng-agresividad').addEventListener('input', function() {
+  document.getElementById('agresividad-val').textContent = this.value;
+});
+
+// ── PROCESAR ────────────────────────────────────────────────────────────────
+document.getElementById('btn-process').addEventListener('click', async () => {
+  if (!audioFile) return;
+
+  // UI: loading
+  setLoading(true);
+  showError('');
+  document.getElementById('result-card').classList.remove('visible');
+
+  const metodo      = document.getElementById('sel-metodo').value;
+  const agresividad = document.getElementById('rng-agresividad').value;
+
+  try {
+    // Animar barra de progreso (fake, el servidor no emite progreso)
+    animateProgress();
+
+    const form = new FormData();
+    form.append('audio', audioFile);
+    form.append('metodo', metodo);
+    form.append('agresividad', agresividad);
+
+    const res = await fetch('/api/process', { method: 'POST', body: form });
+
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({ error: 'Error desconocido' }));
+      throw new Error(json.error || `HTTP ${res.status}`);
+    }
+
+    const snr    = res.headers.get('X-SNR-Reduction') || '—';
+    const metStr = res.headers.get('X-Metodo') || metodo;
+    const blob   = await res.blob();
+    const url    = URL.createObjectURL(blob);
+
+    // Mostrar resultado
+    document.getElementById('audio-result').src = url;
+    document.getElementById('btn-download').href = url;
+    document.getElementById('snr-display').textContent =
+      snr !== '—' ? `+${parseFloat(snr).toFixed(1)} dB reducción` : 'SNR calculada';
+
+    // Chips de info
+    document.getElementById('info-chips').innerHTML = [
+      metStr,
+      `α = ${agresividad}`,
+      audioFile.name.split('.').pop().toUpperCase(),
+    ].map(t => `<span class="chip">${t}</span>`).join('');
+
+    // Waveforms
+    drawWaveform('wv-orig', origBuffer, '#FF6B6B');
+    const procCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const procBuf = await procCtx.decodeAudioData(await blob.arrayBuffer());
+    drawWaveform('wv-proc', procBuf, '#14B8A6');
+
+    document.getElementById('result-card').classList.add('visible');
+    document.getElementById('result-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  } catch (err) {
+    showError(`Error al procesar: ${err.message}`);
+  } finally {
+    setLoading(false);
+  }
+});
+
+// ── HELPERS ─────────────────────────────────────────────────────────────────
+
+function setLoading(on) {
+  const btn = document.getElementById('btn-process');
+  btn.disabled = on;
+  document.getElementById('btn-icon').textContent  = on ? '⏳' : '⚡';
+  document.getElementById('btn-label').textContent = on ? 'Procesando…' : 'Procesar audio';
+  document.getElementById('progress-wrap').classList.toggle('visible', on);
+  if (!on) document.getElementById('progress-fill').style.width = '0%';
+}
+
+let _progTimer = null;
+function animateProgress() {
+  const fill    = document.getElementById('progress-fill');
+  const label   = document.getElementById('progress-label');
+  const steps   = [
+    [15, 'Detectando segmentos de ruido…'],
+    [35, 'Estimando perfil espectral del ruido…'],
+    [60, 'Aplicando máscara FFT frame a frame…'],
+    [80, 'Aplicando EQ correctiva (biquad)…'],
+    [92, 'Normalizando y exportando WAV…'],
+  ];
+  let i = 0;
+  clearInterval(_progTimer);
+  _progTimer = setInterval(() => {
+    if (i >= steps.length) { clearInterval(_progTimer); return; }
+    fill.style.width = steps[i][0] + '%';
+    label.textContent = steps[i][1];
+    i++;
+  }, 900);
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  el.textContent = msg;
+  el.classList.toggle('visible', !!msg);
+}
+
+function drawWaveform(canvasId, audioBuffer, color) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas || !audioBuffer) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width  = canvas.offsetWidth  * dpr;
+  canvas.height = canvas.offsetHeight * dpr;
+  ctx.scale(dpr, dpr);
+
+  const W = canvas.offsetWidth;
+  const H = canvas.offsetHeight;
+  const data = audioBuffer.getChannelData(0);
+  const step = Math.ceil(data.length / W);
+  const mid  = H / 2;
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.beginPath();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+
+  for (let x = 0; x < W; x++) {
+    let min = 1, max = -1;
+    for (let j = 0; j < step; j++) {
+      const v = data[x * step + j] || 0;
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+    ctx.moveTo(x, mid + min * mid * 0.95);
+    ctx.lineTo(x, mid + max * mid * 0.95);
+  }
+  ctx.stroke();
+}
+</script>
+</body>
+</html>
