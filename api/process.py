@@ -475,15 +475,19 @@ class handler(BaseHTTPRequestHandler):
             audio_bytes = fields.get('audio', [None])[0]
             if audio_bytes is None:
                 self._error(400, 'No se recibió el campo "audio"'); return
-
+            
             metodo      = fields.get('metodo', [b'espectral'])[0]
             agresividad = fields.get('agresividad', [b'1.5'])[0]
             if isinstance(metodo, bytes):      metodo = metodo.decode()
-            if isinstance(agresividad, bytes): agresividad = float(agresividad.decode())
+            if isinstance(agresividad, bytes): agresividad = agresividad.decode()
+            metodo      = str(metodo).strip()
+            agresividad = float(str(agresividad).strip())
             if metodo not in METODOS:          metodo = 'espectral'
 
             buf_in = io.BytesIO(audio_bytes if isinstance(audio_bytes, bytes) else bytes(audio_bytes))
+            buf_in.seek(0) 
             senal, fs = sf.read(buf_in)
+            fs = int(fs)
             if senal.ndim > 1: senal = senal.mean(axis=1)
             senal = senal.astype(np.float32)
             senal = np.ascontiguousarray(senal, dtype=np.float64)
