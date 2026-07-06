@@ -580,7 +580,7 @@ Ejemplos:
 # ─────────────────────────────────────────────────────────────────────────────
 #  HANDLER VERCEL — solo se activa cuando corre como función serverless
 # ─────────────────────────────────────────────────────────────────────────────
-""" from http.server import BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler
 import io, cgi, json
 
 class handler(BaseHTTPRequestHandler):
@@ -656,7 +656,7 @@ class handler(BaseHTTPRequestHandler):
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(body)))
         self.end_headers()
-        self.wfile.write(body) """
+        self.wfile.write(body) 
 
 
 if __name__ == '__main__':
