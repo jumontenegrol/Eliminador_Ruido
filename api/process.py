@@ -37,8 +37,13 @@ from scipy.signal import welch
 from scipy.fft import fft, ifft, fftfreq
 import argparse, os, sys, warnings
 warnings.filterwarnings('ignore')
-import webrtcvad
-from scipy.signal import resample_poly
+
+try:
+    import webrtcvad
+    from scipy.signal import resample_poly
+    WEBRTCVAD_DISPONIBLE = True
+except ImportError:
+    WEBRTCVAD_DISPONIBLE = False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -151,6 +156,18 @@ def estimar_ruido(señal, fs, percentil=20):
 
     Esto evita eliminar palabras suaves como si fueran ruido.
     """
+    if not WEBRTCVAD_DISPONIBLE:
+        ventana = int(0.1 * fs)
+        n = len(señal) // ventana
+        rms = np.array([np.sqrt(np.mean(señal[i*ventana:(i+1)*ventana]**2))
+                        for i in range(n)])
+        umbral = np.percentile(rms, 15)
+        idx = [i for i, r in enumerate(rms) if r <= umbral]
+        if not idx:
+            idx = [int(np.argmin(rms))]
+        ruido = np.concatenate([señal[i*ventana:(i+1)*ventana] for i in idx])
+        print(f"  → Ruido estimado por RMS ({len(idx)} segmentos silenciosos)")
+        return ruido
 
     speech_mask = detectar_voz_vad(señal, fs)
 
