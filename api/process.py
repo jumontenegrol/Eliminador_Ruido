@@ -37,6 +37,8 @@ from scipy.signal import welch
 from scipy.fft import fft, ifft, fftfreq
 import argparse, os, sys, warnings
 warnings.filterwarnings('ignore')
+import webrtcvad
+from scipy.signal import resample_poly
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -64,22 +66,144 @@ def guardar_audio(s, fs, ruta):
 #  ESTIMACIÓN AUTOMÁTICA DEL PERFIL DE RUIDO
 # ─────────────────────────────────────────────────────────────────────────────
 
-def estimar_ruido(señal, fs, percentil=15):
+
+def detectar_voz_vad(señal, fs, agresividad=2):
     """
-    Detecta automáticamente los segmentos más silenciosos del audio
-    (donde solo hay ruido de fondo) y los concatena para obtener
-    un perfil espectral del ruido.
+    Detecta qué partes del audio contienen voz utilizando WebRTC VAD.
+
+    Devuelve:
+        speech_mask -> vector booleano del mismo tamaño que la señal.
+                       True = voz
+                       False = no voz
     """
-    ventana = int(0.1 * fs)   # ventanas de 100 ms
-    n = len(señal) // ventana
-    rms = np.array([np.sqrt(np.mean(señal[i*ventana:(i+1)*ventana]**2))
-                    for i in range(n)])
-    umbral = np.percentile(rms, percentil)
-    idx = [i for i, r in enumerate(rms) if r <= umbral]
-    if not idx:
-        idx = [np.argmin(rms)]
-    ruido = np.concatenate([señal[i*ventana:(i+1)*ventana] for i in idx])
-    print(f"  → Ruido estimado a partir de {len(idx)*0.1:.1f}s de segmentos silenciosos")
+
+    vad = webrtcvad.Vad(agresividad)
+
+    # WebRTC trabaja únicamente a estas frecuencias
+    if fs not in [8000, 16000, 32000, 48000]:
+
+        objetivo = 16000
+
+        señal_vad = resample_poly(señal, objetivo, fs)
+
+        fs_vad = objetivo
+
+    else:
+
+        señal_vad = señal
+
+        fs_vad = fs
+
+    # Convertir a PCM16
+    señal_pcm = np.int16(
+        np.clip(señal_vad, -1.0, 1.0) * 32767
+    )
+
+    frame_ms = 30
+
+    frame_len = int(fs_vad * frame_ms / 1000)
+
+    speech_mask_vad = np.zeros(len(señal_pcm), dtype=bool)
+
+    for inicio in range(0, len(señal_pcm) - frame_len, frame_len):
+
+        frame = señal_pcm[inicio:inicio+frame_len]
+
+        if len(frame) != frame_len:
+            continue
+
+        speech = vad.is_speech(frame.tobytes(), fs_vad)
+
+        speech_mask_vad[inicio:inicio+frame_len] = speech
+
+    # Si hubo remuestreo volver al tamaño original
+    if fs_vad != fs:
+
+        x_old = np.linspace(0, 1, len(speech_mask_vad))
+
+        x_new = np.linspace(0, 1, len(señal))
+
+        speech_mask = np.interp(
+            x_new,
+            x_old,
+            speech_mask_vad.astype(float)
+        ) > 0.5
+
+    else:
+
+        speech_mask = speech_mask_vad
+
+    return speech_mask
+
+
+def estimar_ruido(señal, fs, percentil=20):
+    """
+    Estima automáticamente el ruido combinando:
+
+    - Voice Activity Detection (WebRTC)
+    - RMS de energía
+
+    Solo se consideran ruido los segmentos donde:
+
+        NO hay voz
+        Y
+        La energía es baja
+
+    Esto evita eliminar palabras suaves como si fueran ruido.
+    """
+
+    speech_mask = detectar_voz_vad(señal, fs)
+
+    ventana = int(0.03 * fs)      # 30 ms
+
+    ruido_frames = []
+
+    total = len(señal) // ventana
+
+    rms_lista = []
+
+    for i in range(total):
+
+        frame = señal[i*ventana:(i+1)*ventana]
+
+        rms_lista.append(np.sqrt(np.mean(frame**2)))
+
+    rms_lista = np.array(rms_lista)
+
+    umbral = np.percentile(rms_lista, percentil)
+
+    for i in range(total):
+
+        inicio = i * ventana
+
+        fin = inicio + ventana
+
+        frame = señal[inicio:fin]
+
+        rms = rms_lista[i]
+
+        hay_voz = np.mean(speech_mask[inicio:fin]) > 0.3
+
+        if (not hay_voz) and (rms < umbral):
+
+            ruido_frames.append(frame)
+
+    # Si no encontró ruido, usar el método antiguo
+    if len(ruido_frames) == 0:
+
+        idx = np.argmin(rms_lista)
+
+        ruido = señal[idx*ventana:(idx+1)*ventana]
+
+    else:
+
+        ruido = np.concatenate(ruido_frames)
+
+    print(
+        f"  → Perfil de ruido obtenido con "
+        f"{len(ruido_frames)} segmentos VAD"
+    )
+
     return ruido
 
 
@@ -456,7 +580,7 @@ Ejemplos:
 # ─────────────────────────────────────────────────────────────────────────────
 #  HANDLER VERCEL — solo se activa cuando corre como función serverless
 # ─────────────────────────────────────────────────────────────────────────────
-from http.server import BaseHTTPRequestHandler
+""" from http.server import BaseHTTPRequestHandler
 import io, cgi, json
 
 class handler(BaseHTTPRequestHandler):
@@ -532,7 +656,7 @@ class handler(BaseHTTPRequestHandler):
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        self.wfile.write(body) """
 
 
 if __name__ == '__main__':
